@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV转XLSX工具</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .step {
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .step.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 8px;
+            padding: 60px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9ff;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+
+        .upload-area.dragover {
+            background: #e8ebff;
+            border-color: #764ba2;
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .preview-section {
+            margin: 20px 0;
+            max-height: 300px;
+            overflow: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .preview-table th,
+        .preview-table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .preview-table th {
+            background: #667eea;
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .preview-table tr:nth-child(even) {
+            background: #f8f9ff;
+        }
+
+        .column-tree {
+            margin: 20px 0;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .tree-node {
+            margin: 8px 0;
+        }
+
+        .tree-node-parent {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: #f8f9ff;
+            border-radius: 6px;
+            border: 2px solid #e0e0e0;
+            transition: all 0.2s;
+        }
+
+        .tree-node-parent:hover {
+            background: #e8ebff;
+            border-color: #667eea;
+        }
+
+        .tree-node-parent input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .tree-node-parent label {
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 15px;
+            flex: 1;
+            display: flex;
+            align-items: center;
+        }
+
+        .tree-toggle {
+            cursor: pointer;
+            margin-right: 8px;
+            font-size: 14px;
+            width: 20px;
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #667eea;
+            color: white;
+            border-radius: 3px;
+            transition: transform 0.2s;
+        }
+
+        .tree-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .tree-children {
+            margin-left: 40px;
+            margin-top: 8px;
+            border-left: 2px solid #e0e0e0;
+            padding-left: 15px;
+        }
+
+        .tree-children.hidden {
+            display: none;
+        }
+
+        .tree-child {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            margin: 4px 0;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+            transition: all 0.2s;
+        }
+
+        .tree-child:hover {
+            background: #f5f5f5;
+            border-color: #667eea;
+        }
+
+        .tree-child input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .tree-child label {
+            cursor: pointer;
+            font-size: 14px;
+            flex: 1;
+        }
+
+        .column-type-badge {
+            background: #4caf50;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 8px;
+            font-weight: 500;
+        }
+
+        .column-type-badge.json {
+            background: #ff9800;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .buttons {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .selection-summary {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+
+        .summary-item {
+            flex: 1;
+        }
+
+        .summary-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .summary-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .field-path {
+            font-size: 11px;
+            color: #999;
+            margin-left: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 CSV转XLSX工具</h1>
+            <p>上传CSV文件，选择需要的列和字段，一键下载</p>
+        </div>
+
+        <div class="content">
+            <div class="error-message" id="errorMessage"></div>
+
+            <!-- Step 1: 上传文件 -->
+            <div class="step active" id="step1">
+                <h2>📁 上传CSV文件</h2>
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📄</div>
+                    <h3>点击或拖拽文件到此处</h3>
+                    <p>支持 .csv 格式文件</p>
+                    <input type="file" id="fileInput" accept=".csv">
+                </div>
+            </div>
+
+            <!-- Step 2: 选择列和字段 -->
+            <div class="step" id="step2">
+                <h2>📋 数据预览与列选择</h2>
+                
+                <div class="info-box">
+                    <strong>数据信息：</strong>共 <span id="rowCount">0</span> 行，<span id="colCount">0</span> 列
+                    <span id="jsonInfo"></span>
+                </div>
+
+                <h3 style="margin-top: 20px;">数据预览（前5行）</h3>
+                <div class="preview-section">
+                    <table class="preview-table" id="previewTable"></table>
+                </div>
+
+                <h3 style="margin-top: 30px;">选择要导出的列和字段</h3>
+                <div class="selection-summary">
+                    <div class="summary-item">
+                        <div class="summary-number" id="selectedCount">0</div>
+                        <div class="summary-label">已选择列数</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-number" id="totalColumns">0</div>
+                        <div class="summary-label">总列数</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-number" id="jsonColumns">0</div>
+                        <div class="summary-label">JSON列数</div>
+                    </div>
+                </div>
+
+                <div class="buttons">
+                    <button class="btn btn-secondary" onclick="toggleAll(true)">✅ 全选</button>
+                    <button class="btn btn-secondary" onclick="toggleAll(false)">❌ 全不选</button>
+                    <button class="btn btn-secondary" onclick="expandAll(true)">📂 展开全部</button>
+                    <button class="btn btn-secondary" onclick="expandAll(false)">📁 折叠全部</button>
+                </div>
+
+                <div class="column-tree" id="columnTree"></div>
+
+                <div class="buttons">
+                    <button class="btn btn-secondary" onclick="goToStep(1)">⬅️ 重新上传</button>
+                    <button class="btn" onclick="downloadExcel()">💾 下载XLSX文件</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let csvData = [];
+        let csvHeaders = [];
+        let columnStructure = [];
+
+        // 初始化
+        document.getElementById('uploadArea').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+
+        // 拖拽上传
+        const uploadArea = document.getElementById('uploadArea');
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            handleFile(file);
+        }
+
+        function handleFile(file) {
+            if (!file || !file.name.endsWith('.csv')) {
+                showError('请选择CSV格式的文件');
+                return;
+            }
+
+            Papa.parse(file, {
+                complete: function(results) {
+                    if (results.data && results.data.length > 0) {
+                        csvData = results.data.filter(row => row.some(cell => cell && cell.trim() !== ''));
+                        if (csvData.length < 2) {
+                            showError('CSV文件数据不足');
+                            return;
+                        }
+                        csvHeaders = csvData[0];
+                        analyzeColumns();
+                        showPreview();
+                        buildColumnTree();
+                        goToStep(2);
+                    } else {
+                        showError('文件为空或格式错误');
+                    }
+                },
+                error: function(error) {
+                    showError('解析文件失败: ' + error.message);
+                }
+            });
+        }
+
+        function analyzeColumns() {
+            columnStructure = [];
+            let jsonCount = 0;
+            
+            csvHeaders.forEach((header, index) => {
+                const column = {
+                    name: header,
+                    index: index,
+                    type: 'normal',
+                    children: [],
+                    selected: true
+                };
+
+                // 分析前5行数据
+                const sampleData = [];
+                for (let i = 1; i < Math.min(csvData.length, 6); i++) {
+                    const cell = csvData[i][index];
+                    if (cell && cell.trim()) {
+                        sampleData.push(cell);
+                    }
+                }
+
+                // 检查是否为JSON（对象或数组）
+                let allKeys = new Set();
+                let isJson = false;
+                
+                sampleData.forEach(cell => {
+                    const parsed = tryParseJson(cell);
+                    if (parsed && typeof parsed === 'object') {
+                        isJson = true;
+                        // 递归提取所有键（支持嵌套）
+                        extractKeys(parsed, allKeys);
+                    }
+                });
+
+                if (isJson && allKeys.size > 0) {
+                    column.type = 'json';
+                    column.children = Array.from(allKeys).map(key => ({
+                        name: key,
+                        path: key,
+                        selected: true
+                    }));
+                    jsonCount++;
+                }
+
+                columnStructure.push(column);
+            });
+
+            console.log('列结构分析:', columnStructure);
+            document.getElementById('jsonColumns').textContent = jsonCount;
+            document.getElementById('totalColumns').textContent = csvHeaders.length;
+            
+            if (jsonCount > 0) {
+                document.getElementById('jsonInfo').innerHTML = ` | <strong style="color: #ff9800;">检测到 ${jsonCount} 个JSON列</strong>`;
+            }
+        }
+
+        // 递归提取JSON中的所有键（支持嵌套对象和数组）
+        function extractKeys(obj, keySet, prefix = '') {
+            if (Array.isArray(obj)) {
+                // 如果是数组，分析数组中的每个元素
+                obj.forEach(item => {
+                    if (typeof item === 'object' && item !== null) {
+                        extractKeys(item, keySet, prefix);
+                    }
+                });
+            } else if (typeof obj === 'object' && obj !== null) {
+                // 如果是对象，提取所有键
+                Object.keys(obj).forEach(key => {
+                    const currentPath = prefix ? `${prefix}.${key}` : key;
+                    keySet.add(currentPath);
+                    
+                    // 递归处理嵌套对象
+                    const value = obj[key];
+                    if (typeof value === 'object' && value !== null) {
+                        extractKeys(value, keySet, currentPath);
+                    }
+                });
+            }
+        }
+
+        function tryParseJson(str) {
+            try {
+                return JSON.parse(str);
+            } catch {
+                return null;
+            }
+        }
+
+        function showPreview() {
+            const table = document.getElementById('previewTable');
+            table.innerHTML = '';
+            
+            // 显示前6行（表头+5行数据）
+            const rowsToShow = Math.min(csvData.length, 6);
+            
+            for (let i = 0; i < rowsToShow; i++) {
+                const tr = document.createElement('tr');
+                csvData[i].forEach(cell => {
+                    const td = document.createElement(i === 0 ? 'th' : 'td');
+                    const displayText = cell && cell.length > 100 ? cell.substring(0, 100) + '...' : cell;
+                    td.textContent = displayText || '';
+                    td.title = cell; // 完整内容显示在tooltip
+                    tr.appendChild(td);
+                });
+                table.appendChild(tr);
+            }
+
+            document.getElementById('rowCount').textContent = csvData.length - 1;
+            document.getElementById('colCount').textContent = csvHeaders.length;
+        }
+
+        function buildColumnTree() {
+            const container = document.getElementById('columnTree');
+            container.innerHTML = '';
+
+            columnStructure.forEach((column, colIndex) => {
+                const nodeDiv = document.createElement('div');
+                nodeDiv.className = 'tree-node';
+
+                // 父节点
+                const parentDiv = document.createElement('div');
+                parentDiv.className = 'tree-node-parent';
+
+                const parentCheckbox = document.createElement('input');
+                parentCheckbox.type = 'checkbox';
+                parentCheckbox.checked = column.selected;
+                parentCheckbox.id = `col_${colIndex}`;
+                parentCheckbox.onchange = () => toggleColumn(colIndex);
+
+                const parentLabel = document.createElement('label');
+                parentLabel.htmlFor = `col_${colIndex}`;
+
+                // 如果有子节点，添加展开/折叠按钮
+                if (column.children.length > 0) {
+                    const toggleBtn = document.createElement('span');
+                    toggleBtn.className = 'tree-toggle';
+                    toggleBtn.textContent = '▼';
+                    toggleBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        toggleChildren(colIndex);
+                    };
+                    parentLabel.appendChild(toggleBtn);
+                }
+
+                const labelText = document.createTextNode(column.name);
+                parentLabel.appendChild(labelText);
+
+                // 类型标记
+                const badge = document.createElement('span');
+                badge.className = column.type === 'json' ? 'column-type-badge json' : 'column-type-badge';
+                badge.textContent = column.type === 'json' ? `JSON (${column.children.length}字段)` : '普通列';
+                parentLabel.appendChild(badge);
+
+                parentDiv.appendChild(parentCheckbox);
+                parentDiv.appendChild(parentLabel);
+                nodeDiv.appendChild(parentDiv);
+
+                // 子节点
+                if (column.children.length > 0) {
+                    const childrenDiv = document.createElement('div');
+                    childrenDiv.className = 'tree-children';
+                    childrenDiv.id = `children_${colIndex}`;
+
+                    column.children.forEach((child, childIndex) => {
+                        const childDiv = document.createElement('div');
+                        childDiv.className = 'tree-child';
+
+                        const childCheckbox = document.createElement('input');
+                        childCheckbox.type = 'checkbox';
+                        childCheckbox.checked = child.selected;
+                        childCheckbox.id = `col_${colIndex}_${childIndex}`;
+                        childCheckbox.onchange = () => toggleChildField(colIndex, childIndex);
+
+                        const childLabel = document.createElement('label');
+                        childLabel.htmlFor = `col_${colIndex}_${childIndex}`;
+                        
+                        // 如果有路径（嵌套字段），显示完整路径
+                        const displayName = child.name;
+                        childLabel.textContent = displayName;
+                        
+                        if (child.path && child.path.includes('.')) {
+                            const pathSpan = document.createElement('span');
+                            pathSpan.className = 'field-path';
+                            pathSpan.textContent = `(${child.path})`;
+                            childLabel.appendChild(pathSpan);
+                        }
+
+                        childDiv.appendChild(childCheckbox);
+                        childDiv.appendChild(childLabel);
+                        childrenDiv.appendChild(childDiv);
+                    });
+
+                    nodeDiv.appendChild(childrenDiv);
+                }
+
+                container.appendChild(nodeDiv);
+            });
+
+            updateSelectionCount();
+        }
+
+        function toggleColumn(colIndex) {
+            const checkbox = document.getElementById(`col_${colIndex}`);
+            columnStructure[colIndex].selected = checkbox.checked;
+            
+            // 如果有子节点，同步子节点状态
+            if (columnStructure[colIndex].children.length > 0) {
+                columnStructure[colIndex].children.forEach((child, childIndex) => {
+                    child.selected = checkbox.checked;
+                    const childCheckbox = document.getElementById(`col_${colIndex}_${childIndex}`);
+                    if (childCheckbox) {
+                        childCheckbox.checked = checkbox.checked;
+                    }
+                });
+            }
+            
+            updateSelectionCount();
+        }
+
+        function toggleChildField(colIndex, childIndex) {
+            const checkbox = document.getElementById(`col_${colIndex}_${childIndex}`);
+            columnStructure[colIndex].children[childIndex].selected = checkbox.checked;
+            
+            // 检查是否所有子节点都未选中
+            const allUnchecked = columnStructure[colIndex].children.every(child => !child.selected);
+            if (allUnchecked) {
+                columnStructure[colIndex].selected = false;
+                document.getElementById(`col_${colIndex}`).checked = false;
+            } else {
+                columnStructure[colIndex].selected = true;
+                document.getElementById(`col_${colIndex}`).checked = true;
+            }
+            
+            updateSelectionCount();
+        }
+
+        function toggleChildren(colIndex) {
+            const childrenDiv = document.getElementById(`children_${colIndex}`);
+            const toggleBtn = childrenDiv.previousElementSibling.querySelector('.tree-toggle');
+            
+            if (childrenDiv.classList.contains('hidden')) {
+                childrenDiv.classList.remove('hidden');
+                toggleBtn.classList.remove('collapsed');
+            } else {
+                childrenDiv.classList.add('hidden');
+                toggleBtn.classList.add('collapsed');
+            }
+        }
+
+        function toggleAll(select) {
+            columnStructure.forEach((column, colIndex) => {
+                column.selected = select;
+                const checkbox = document.getElementById(`col_${colIndex}`);
+                if (checkbox) checkbox.checked = select;
+                
+                column.children.forEach((child, childIndex) => {
+                    child.selected = select;
+                    const childCheckbox = document.getElementById(`col_${colIndex}_${childIndex}`);
+                    if (childCheckbox) {
+                        childCheckbox.checked = select;
+                    }
+                });
+            });
+            updateSelectionCount();
+        }
+
+        function expandAll(expand) {
+            columnStructure.forEach((column, colIndex) => {
+                if (column.children.length > 0) {
+                    const childrenDiv = document.getElementById(`children_${colIndex}`);
+                    const toggleBtn = childrenDiv?.previousElementSibling?.querySelector('.tree-toggle');
+                    
+                    if (childrenDiv && toggleBtn) {
+                        if (expand) {
+                            childrenDiv.classList.remove('hidden');
+                            toggleBtn.classList.remove('collapsed');
+                        } else {
+                            childrenDiv.classList.add('hidden');
+                            toggleBtn.classList.add('collapsed');
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateSelectionCount() {
+            let count = 0;
+            columnStructure.forEach(column => {
+                if (column.selected) {
+                    if (column.type === 'json') {
+                        count += column.children.filter(child => child.selected).length;
+                    } else {
+                        count++;
+                    }
+                }
+            });
+            document.getElementById('selectedCount').textContent = count;
+        }
+
+        function goToStep(step) {
+            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+            document.getElementById(`step${step}`).classList.add('active');
+        }
+
+        function downloadExcel() {
+            const selectedCount = parseInt(document.getElementById('selectedCount').textContent);
+            if (selectedCount === 0) {
+                showError('请至少选择一个列或字段');
+                return;
+            }
+
+            try {
+                const exportData = prepareExportData();
+                const ws = XLSX.utils.aoa_to_sheet(exportData);
+                
+                // 自动调整列宽
+                const colWidths = exportData[0].map(() => ({ wch: 20 }));
+                ws['!cols'] = colWidths;
+                
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "数据");
+                
+                const fileName = 'export_' + new Date().getTime() + '.xlsx';
+                XLSX.writeFile(wb, fileName);
+                
+                showError('');
+                alert('✅ 文件下载成功！');
+            } catch (error) {
+                showError('导出失败: ' + error.message);
+                console.error(error);
+            }
+        }
+
+        function prepareExportData() {
+            const result = [];
+            const headers = [];
+            const columnMap = [];
+
+            // 构建表头和列映射
+            columnStructure.forEach(column => {
+                if (column.selected) {
+                    if (column.type === 'json' && column.children.length > 0) {
+                        // JSON列展开
+                        const selectedChildren = column.children.filter(child => child.selected);
+                        selectedChildren.forEach(child => {
+                            headers.push(`${column.name}_${child.name}`);
+                            columnMap.push({
+                                type: 'json',
+                                parentIndex: column.index,
+                                fieldPath: child.path
+                            });
+                        });
+                    } else {
+                        // 普通列
+                        headers.push(column.name);
+                        columnMap.push({
+                            type: 'normal',
+                            index: column.index
+                        });
+                    }
+                }
+            });
+
+            result.push(headers);
+
+            // 处理数据行
+            for (let i = 1; i < csvData.length; i++) {
+                const row = [];
+                
+                columnMap.forEach(colInfo => {
+                    if (colInfo.type === 'normal') {
+                        row.push(csvData[i][colInfo.index] || '');
+                    } else if (colInfo.type === 'json') {
+                        const cellValue = csvData[i][colInfo.parentIndex] || '';
+                        const parsed = tryParseJson(cellValue);
+                        
+                        if (parsed) {
+                            // 根据路径提取值
+                            const value = getValueByPath(parsed, colInfo.fieldPath);
+                            row.push(formatValue(value));
+                        } else {
+                            row.push('');
+                        }
+                    }
+                });
+                
+                result.push(row);
+            }
+
+            return result;
+        }
+
+        // 根据路径获取嵌套对象的值
+        function getValueByPath(obj, path) {
+            const keys = path.split('.');
+            let current = obj;
+            
+            for (const key of keys) {
+                if (current === null || current === undefined) {
+                    return '';
+                }
+                
+                // 如果当前是数组，收集所有元素的该字段
+                if (Array.isArray(current)) {
+                    const values = current.map(item => {
+                        if (typeof item === 'object' && item !== null) {
+                            return item[key];
+                        }
+                        return '';
+                    }).filter(v => v !== '' && v !== null && v !== undefined);
+                    
+                    // 如果还有更多层级，继续递归
+                    if (keys.indexOf(key) < keys.length - 1) {
+                        const remainingPath = keys.slice(keys.indexOf(key) + 1).join('.');
+                        return values.map(v => getValueByPath(v, remainingPath)).join('; ');
+                    }
+                    
+                    return values.join('; ');
+                }
+                
+                current = current[key];
+            }
+            
+            return current;
+        }
+
+        // 格式化值（处理数组、对象等）
+        function formatValue(value) {
+            if (value === null || value === undefined) {
+                return '';
+            }
+            if (Array.isArray(value)) {
+                return value.map(v => formatValue(v)).join('; ');
+            }
+            if (typeof value === 'object') {
+                return JSON.stringify(value);
+            }
+            return String(value);
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            if (message) {
+                errorDiv.textContent = '❌ ' + message;
+                errorDiv.classList.add('show');
+                setTimeout(() => {
+                    errorDiv.classList.remove('show');
+                }, 5000);
+            } else {
+                errorDiv.classList.remove('show');
+            }
+        }
+    </script>
+</body>
+</html>

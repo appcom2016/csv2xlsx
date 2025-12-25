@@ -879,10 +879,10 @@
                     // 如果还有更多层级，继续递归
                     if (keys.indexOf(key) < keys.length - 1) {
                         const remainingPath = keys.slice(keys.indexOf(key) + 1).join('.');
-                        return values.map(v => getValueByPath(v, remainingPath)).join('; ');
+                        return values.map(v => getValueByPath(v, remainingPath)).join(',');
                     }
                     
-                    return values.join('; ');
+                    return values.join(',');
                 }
                 
                 current = current[key];
@@ -897,7 +897,7 @@
                 return '';
             }
             if (Array.isArray(value)) {
-                return value.map(v => formatValue(v)).join('; ');
+                return value.map(v => formatValue(v)).join(',');
             }
             if (typeof value === 'object') {
                 return JSON.stringify(value);
